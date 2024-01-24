@@ -40,8 +40,10 @@ app.get("/items", async (request, response) => {
 });
 
 app.get("/categories", async (request, response) => {
+  console.log("categories")
   try {
     const data = await Category.find();
+    console.log(data)
     response.json(data);
   } catch (error) {
     response.status(500).json({ message: "Internal server error" });
