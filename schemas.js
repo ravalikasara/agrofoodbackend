@@ -54,7 +54,7 @@ const cartSchema = new mongoose.Schema({
  price: { type: Number },
   image_url: { type: String},
   quantity:{type:Number}
-}); 
+});  
 
 
 const Cart = mongoose.model('Cart', cartSchema);
