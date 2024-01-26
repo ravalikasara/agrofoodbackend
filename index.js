@@ -4,7 +4,7 @@ const cors = require("cors");
 const bcrypt = require('bcrypt')
 const token = require('jsonwebtoken')
 const mongoose = require('mongoose');
-const { User, Item, Cart, Category } = require('./schemas'); // Adjust the path accordingly
+const { User, Item, Cart, Category ,Wishlist} = require('./schemas'); // Adjust the path accordingly
 
 const app = express();
 require('dotenv').config();
@@ -31,7 +31,26 @@ initializeDBAndServer();
 
 app.get("/items", async (request, response) => {
   try {
-    const data = await Item.find();
+    const { sort_by = 'id', search_q = '', order = 'ASC', category_id = '' } = request.query;
+
+    let query = {};
+
+    // Add category filter if provided
+    if (category_id !== '') {
+      query.category_id = category_id;
+    }
+
+    // Add name search
+    if (search_q !== '') {
+      query.name = { $regex: search_q, $options: 'i' }; // Case-insensitive search
+    }
+
+    // Sort the result
+    const sortOptions = {};
+    sortOptions[sort_by] = order === 'ASC' ? 1 : -1;
+
+    const data = await Item.find(query).sort(sortOptions);
+
     response.json(data);
   } catch (error) {
     console.error("Error fetching items:", error);
@@ -39,11 +58,12 @@ app.get("/items", async (request, response) => {
   }
 });
 
+
 app.get("/categories", async (request, response) => {
-  console.log("categories")
+ 
   try {
     const data = await Category.find();
-    console.log(data)
+    
     response.json(data);
   } catch (error) {
     response.status(500).json({ message: "Internal server error" });
@@ -144,29 +164,41 @@ app.get('/add-cart', async (request, response) => {
 
   try {
     const { id, user_id, quantity } = request.query;
+
+  
    
-    const productDetails = await Item.findOne({ id });
+    const productDetails = await Item.findOne({_id:id});
+  
 
 
-    const cartData = await Cart.findOne({ product_id: id, user_id})
-     
+   
+      const cartData = await Cart.findOne({ product_id: id, user_id });
+      // The code after this line will execute if there are no errors in the previous line.
+
+    
+    
+    
     if (cartData===null) {
    
       const newCartItem = new Cart({
         user_id,
-        product_id: productDetails.id,
-        category_id: productDetails.category_id,
+        product_id:id,
+        category_id: parseInt(productDetails.category_id),
         name: productDetails.name,
-        price: productDetails.price,
+        price: parseInt(productDetails.price),
         image_url: productDetails.image_url,
         quantity:parseInt(quantity),
       });
       try {
         await newCartItem.save();
 
+        const data = await Cart.find({user_id})
+
+
+      
         response.status(200).json({ message: "Success" });
       } catch (error) {
-        console.error("Save Error:", error);
+        
         response.status(500).json({ message: "Internal server error", error });
       }
       
@@ -187,10 +219,11 @@ app.get('/cart', async (req, res) => {
   try {
     const { user_id } = req.query;
 
-    const data = await Cart.find({ user_id:user_id });
+const data = await Cart.find({ user_id})
+
+
+    res.status(200).json({ data });
     
-   
-    res.json({ data });
   } catch (error) {
     res.status(500).json({ message: "Internal server error" });
   }
@@ -208,10 +241,13 @@ app.get('/remove-cart', async (req, res) => {
 });
 
 app.get('/add-quantity', async (req, res) => {
+  const { id, user_id } = req.query;
+
   try {
-    const { id, user_id } = req.query;
+   
     const productDetails = await Cart.findOne({ product_id: id, user_id });
 
+  
     if (productDetails) {
       const newQuantity = productDetails.quantity + 1;
 
@@ -219,6 +255,7 @@ app.get('/add-quantity', async (req, res) => {
         { user_id, product_id: id },
         { $set: { quantity: newQuantity } }
       );
+      
       res.json({ message: "Quantity updated successfully" });
     } else {
       res.status(404).json({ message: "Product not found in the cart" });
@@ -233,7 +270,7 @@ app.get('/remove-quantity', async (req, res) => {
     try {
       const { id, user_id } = req.query;
       const productDetails = await Cart.findOne({ product_id: id, user_id });
-  
+
       if (productDetails) {
         const newQuantity = Math.max(1, productDetails.quantity - 1);
   
@@ -258,3 +295,126 @@ app.get('/remove-quantity', async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   });
 
+
+
+
+  app.get('/add-wishlist', async (request, response) => {
+
+    try {
+      const { id, user_id} = request.query;
+  
+
+     
+     
+      const productDetails = await Item.findOne({ _id:id });
+      
+  
+      const wishListData = await Wishlist.findOne({ product_id: id, user_id})
+  
+    
+       
+      if (wishListData===null) {
+     
+        const newWishlistItem = new Wishlist({
+          user_id,
+          product_id: productDetails.id,
+          category_id: parseInt(productDetails.category_id),
+          name: productDetails.name,
+          price: parseInt(productDetails.price),
+          image_url: productDetails.image_url,
+          
+        });
+        try {
+          await newWishlistItem.save();
+  
+          response.status(200).json({ message: "Success" });
+        } catch (error) {
+          console.error("Save Error:", error);
+          response.status(500).json({ message: "Internal server error", error });
+        }
+        
+        
+        
+      
+  
+  
+      } else {
+        response.status(400).json({ message: "Already exists in the cart" });
+      }
+    } catch (error) {
+      response.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
+
+  app.get('/remove-wishlist', async (req, res) => {
+    try {
+      const { user_id, product_id } = req.query;
+
+      await Wishlist.findOneAndDelete({ user_id, product_id });
+      res.json({ message: "Removed from the wishlist" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+
+  app.get('/wishlist', async (req, res) => {
+    try {
+      const { user_id } = req.query;
+  
+      const data = await Wishlist.find({ user_id:user_id });
+     
+     
+      res.json({ data });
+      
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+
+  app.post('/social-login', async (request, response) => {
+    const { username, email, profileImg } = request.body;
+  
+    try {
+
+      try {
+        // Check if the user already exists based on email
+        const existingUser = await User.findOne({ email });
+
+        if (existingUser) {
+          // Update user's social login details
+          existingUser.socialLogin = true;
+          await existingUser.save();
+          const payload = {username: existingUser.username };
+       
+          const jwtToken = token.sign(payload, process.env.JWT_SECRET);
+        
+          response.status(200).json({ jwtToken });
+
+
+          
+        } else {
+          // If user doesn't exist, create a new user
+          const newUser = new User({ username, email, profile_img:profileImg,socialLogin: true });
+          await newUser.save();
+  
+          const payload = {username:username };
+       
+          const jwtToken = token.sign(payload, process.env.JWT_SECRET);
+        
+          response.status(200).json({ jwtToken });
+
+        }
+      } catch (findError) {
+        console.error("Error finding user:", findError);
+        response.status(500).json({ message: "Internal server error" });
+      }
+    } catch (error) {
+      console.error("Error in social login endpoint:", error);
+      response.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
+  
