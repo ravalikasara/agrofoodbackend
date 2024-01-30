@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt')
 const token = require('jsonwebtoken')
 const mongoose = require('mongoose');
 const { User, Item, Cart, Category ,Wishlist} = require('./schemas'); // Adjust the path accordingly
-
+const sendMail= require('./sendMail.js')
 const app = express();
 require('dotenv').config();
 
@@ -99,9 +99,11 @@ app.post('/login', async (request, response) => {
 });
 
 app.post('/register', async (request, response) => {
-  try {
-    const { username, password, email } = request.body;
 
+  try {
+    const { username, password, email,phoneNumber } = request.body;
+
+    
     
 
     try {
@@ -109,11 +111,12 @@ app.post('/register', async (request, response) => {
 
       if (existingUser) {
         return response.status(400).json({ message: "Username already exists" });
+      
       }
-
       const hashedPassword = await bcrypt.hash(password, 10);
-      const newUser = new User({ username, password: hashedPassword, email });
+      const newUser = new User({ username, password: hashedPassword, email,phoneNumber });
       await newUser.save();
+      sendMail(username, password, email,phoneNumber)
       response.json({ message: "User registered successfully" });
 
        
